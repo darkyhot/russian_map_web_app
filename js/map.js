@@ -46,13 +46,35 @@ const RussiaMap = (() => {
         const height = container.clientHeight;
 
         // Albers projection optimized for Russia
+        // Use explicit scale/translate instead of fitSize to avoid
+        // antimeridian bounding box issues (Chukotka crosses 180°)
         projection = d3.geoAlbers()
             .rotate([-105, 0])
             .center([0, 65])
             .parallels([52, 75])
-            .fitSize([width, height], geojson);
+            .scale(1)
+            .translate([0, 0]);
 
         pathGenerator = d3.geoPath().projection(projection);
+
+        // Compute bounds excluding features that cross the antimeridian
+        const mainFeatures = {
+            type: 'FeatureCollection',
+            features: geojson.features.filter(f => {
+                const name = f.properties.name;
+                return name !== 'Чукотский автономный округ';
+            })
+        };
+
+        const bounds = pathGenerator.bounds(mainFeatures);
+        const dx = bounds[1][0] - bounds[0][0];
+        const dy = bounds[1][1] - bounds[0][1];
+        const x = (bounds[0][0] + bounds[1][0]) / 2;
+        const y = (bounds[0][1] + bounds[1][1]) / 2;
+        const scale = 0.9 / Math.max(dx / width, dy / height);
+        const translate = [width / 2 - scale * x, height / 2 - scale * y];
+
+        projection.scale(scale).translate(translate);
 
         g.selectAll('.region')
             .data(geojson.features)
